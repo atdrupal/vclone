@@ -1,0 +1,116 @@
+<?php
+/**
+ * Quick module to clone a node.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function vclone_permission() {
+  return array(
+    'access vclone' => array('title' => t('User content clone feature'))
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function vclone_menu() {
+  $items['node/%node/clone'] = array(
+    'title' => 'Clone',
+    'access arguments' => array('access vclone'),
+    'page callback' => 'vclone_node',
+    'page arguments' => array(1),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function vclone_node_view_alter(&$build) {
+  $node = &$build['#node'];
+  if (user_access('access vclone')) {
+    $build['links']['vclone'] = array(
+      '#theme' => 'links__node__node',
+      '#links' => array(
+        'vclone' => array(
+          'title' => t('Clone'),
+          'href' => "node/{$node->nid}/clone",
+        ),
+      ),
+    );
+  }
+}
+
+/**
+ * Function to clone a node.
+ */
+function vclone_node($node) {
+  $info = _field_info_collate_fields();
+  $bundle_info = $info['instances']['node'][$node->type];
+
+  $fc = array();
+  foreach ($bundle_info as $field_name => $field_info) {
+    if ($field_info['widget']['type'] !== 'field_collection_embed') continue;
+    $fc[$field_name] = $node->{$field_name};
+    unset($node->{$field_name});
+  }
+
+  $node->language = LANGUAGE_NONE;
+
+  // Save new node
+  unset($node->nid, $node->vid);
+  node_save($node);
+
+  if (!empty($fc)) {
+    foreach (array_keys($fc) as $field_name) {
+      $node_fields = $fc[$field_name];
+      foreach ($node_fields as $node_field) {
+        foreach ($node_field as $node_field_item) {
+          vclone_fc($node_field_item['value'], $node, 'node');
+        }
+      }
+    }
+  }
+
+  drupal_goto("node/{$node->nid}");
+}
+
+/**
+ * Clone a field collection field.
+ */
+function vclone_fc($entity_id, $host_entity, $host_entity_type) {
+  $fc_item = entity_load('field_collection_item', array($entity_id));
+  if (!$fc_item) return FALSE;
+  $fc_item = reset($fc_item);
+
+  $info = _field_info_collate_fields();
+  $bundle_info = $info['instances']['field_collection_item'][$fc_item->field_name];
+
+  $fc = array();
+  foreach ($bundle_info as $field_name => $field_info) {
+    if ($field_info['widget']['type'] !== 'field_collection_embed') continue;
+    $fc[$field_name] = $fc_item->{$field_name};
+    unset($fc_item->{$field_name});
+  }
+
+  unset($fc_item->item_id, $fc_item->revision_id);
+  $fc_item->is_new = TRUE;
+  $fc_item->setHostEntity($host_entity_type, $host_entity);
+  $fc_item->save();
+
+  if (!empty($fc)) {
+    foreach (array_keys($fc) as $field_name) {
+      $fci_fields = $fc[$field_name];
+      foreach ($fci_fields as $fci_field) {
+        foreach ($fci_field as $fci_field_item) {
+          vclone_fc($fci_field_item['value'], $fc_item, 'field_collection_item');
+        }
+      }
+    }
+  }
+
+  return $fc_item;
+}

@@ -1,0 +1,4 @@
+name = V.Clone
+version = VERSION
+description = Quick module to clone a post
+core = 7.x
