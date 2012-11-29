@@ -97,6 +97,7 @@ function vclone_fc($entity_id, $host_entity, $host_entity_type) {
   }
 
   unset($fc_item->item_id, $fc_item->revision_id);
+  $fc_item->revision_id = 0; // Fatal error: Field 'revision_id' doesn't have a default value
   $fc_item->is_new = TRUE;
   $fc_item->setHostEntity($host_entity_type, $host_entity);
   $fc_item->save();
